@@ -1,10 +1,15 @@
+# This program was modified by [Lena Mukhtar] / [n00639928]
+
 import socket
 import argparse
+
+
 
 def run_server(port, output_file):
     # 1. Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    
+   
+
     # 2. Bind the socket to the port (0.0.0.0 means all interfaces)
     server_address = ('', port)
     print(f"[*] Server listening on port {port}")
@@ -20,7 +25,12 @@ def run_server(port, output_file):
             while True:
                 data, addr = sock.recvfrom(4096)
                 # Protocol: If we receive an empty packet, it means "End of File"
-                if not data:
+                seq_str,payload = data.split(b"|",1)
+                seq = int(seq_str.decode())
+
+                
+                
+                if payload == b"EOF":
                     print(f"[*] End of file signal received from {addr}. Closing.")
                     break
                 if f is None:
@@ -29,6 +39,16 @@ def run_server(port, output_file):
                     sender_filename = f"received_{ip.replace('.', '_')}_{sender_port}.jpg"
                     f = open(sender_filename, 'wb')
                     print(f"[*] First packet received from {addr}. File opened for writing as '{sender_filename}'.")
+                if seq == reception_started:
+                    f.write(payload)
+                    reception_started+=1
+                    print(f"[+] Packet {seq} written")
+                else: 
+                    print(f"[!] Duplicate/out-of-order packet {seq}(expected {reception_started})")
+
+                 # Send ACK (always)
+                ack = f"ACK|{seq}".encode()
+                sock.sendto(ack, addr)
                 # Write data to disk
                 f.write(data)
                 # print(f"Server received {len(data)} bytes from {addr}") # Optional: noisy
@@ -49,9 +69,9 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, default="received_file.jpg", help="File path to save data")
     args = parser.parse_args()
 
-    try:
-        run_server(args.port, args.output)
-    except KeyboardInterrupt:
-        print("\n[!] Server stopped manually.")
-    except Exception as e:
-        print(f"[!] Error: {e}")
+    # try:
+    run_server(args.port, args.output)
+    # except KeyboardInterrupt:
+    #     print("\n[!] Server stopped manually.")
+    # except Exception as e:
+    #     print(f"[!] Error: {e}")

@@ -1,3 +1,5 @@
+# This program was modified by [Lena Mukhtar] / [n00639928]
+
 import socket
 import argparse
 import time
@@ -7,6 +9,8 @@ def run_client(target_ip, target_port, input_file):
     # 1. Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = (target_ip, target_port)
+    sock.settimeout(1.0)
+    seq = 0 
 
     print(f"[*] Sending file '{input_file}' to {target_ip}:{target_port}")
 
@@ -23,18 +27,26 @@ def run_client(target_ip, target_port, input_file):
                 if not chunk:
                     # End of file reached
                     break
-
+                packet = f"{seq}|".encode() + chunk
                 # Send the chunk
-                sock.sendto(chunk, server_address)
-                
-                # Optional: Small sleep to prevent overwhelming the OS buffer locally
-                # (In a perfect world, we wouldn't need this, but raw UDP is fast!)
-                time.sleep(0.001)
+                while True:
+                    sock.sendto(chunk, server_address)
+                    print(f"[*] sent packet {seq}")
 
-        # Send empty packet to signal "End of File"
-        sock.sendto(b'', server_address)
-        print("[*] File transmission complete.")
+                    try: 
+                        ack,_ =sock.recvfrom(1024)
+                        ack_type,ack_seq = ack.decode().split("|")
 
+                        if ack_type == "ACK" and int(ack_seq) == seq:
+                            print(f"[+] ACK received for packet {seq}")
+                            seq += 1
+                            break 
+                    except socket.timeout:
+                        print(f"[!] Timeout , retransmitting packet {seq}")  
+                 # Send empty packet to signal "End of File"
+                eof_packet = f"{seq} |EOF".encode()
+                sock.sendto(eof_packet, server_address)
+                print("[*] File transmission complete.")   
     except Exception as e:
         print(f"[!] Error: {e}")
     finally:
